@@ -173,6 +173,12 @@ def config() -> argparse.Namespace:
     # example config
     parser.add_argument("--test_start_idx", type=int, default=0)
     parser.add_argument("--test_end_idx", type=int, default=910)
+    parser.add_argument(
+        "--task_ids",
+        type=str,
+        default="",
+        help="Comma-separated list of specific task IDs to run (overrides start/end idx)",
+    )
 
     # logging related
     parser.add_argument("--result_dir", type=str, default="")
@@ -523,10 +529,17 @@ if __name__ == "__main__":
     test_config_base_dir = args.test_config_base_dir
 
     test_file_list = []
-    st_idx = args.test_start_idx
-    ed_idx = args.test_end_idx
-    for i in range(st_idx, ed_idx):
-        test_file_list.append(os.path.join(test_config_base_dir, f"{i}.json"))
+    if args.task_ids:
+        # Use explicit task IDs
+        for tid in args.task_ids.split(","):
+            tid = tid.strip()
+            if tid:
+                test_file_list.append(os.path.join(test_config_base_dir, f"{tid}.json"))
+    else:
+        st_idx = args.test_start_idx
+        ed_idx = args.test_end_idx
+        for i in range(st_idx, ed_idx):
+            test_file_list.append(os.path.join(test_config_base_dir, f"{i}.json"))
     test_file_list = get_unfinished(test_file_list, args.result_dir)
     print(f"Total {len(test_file_list)} tasks left")
     args.render = False

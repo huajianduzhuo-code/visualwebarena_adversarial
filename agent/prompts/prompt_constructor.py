@@ -44,23 +44,42 @@ class PromptConstructor(object):
         message: list[dict[str, str]] | str
         if "openai" in self.lm_config.provider:
             if self.lm_config.mode == "chat":
-                message = [{"role": "system", "content": intro}]
-                for (x, y) in examples:
-                    message.append(
-                        {
-                            "role": "system",
-                            "name": "example_user",
-                            "content": x,
-                        }
-                    )
-                    message.append(
-                        {
-                            "role": "system",
-                            "name": "example_assistant",
-                            "content": y,
-                        }
-                    )
-                message.append({"role": "user", "content": current})
+                # Check if model requires strict user/assistant alternation
+                model_lower = self.lm_config.model.lower()
+                is_strict_alternation = "gemma" in model_lower or "llama" in model_lower
+
+                if is_strict_alternation:
+                    # For Gemma/Llama: use user/assistant alternation,
+                    # prepend intro to the first user message
+                    message = []
+                    for i, (x, y) in enumerate(examples):
+                        user_text = (intro + "\n\n" + x) if i == 0 else x
+                        message.append({"role": "user", "content": user_text})
+                        message.append({"role": "assistant", "content": y})
+                    # If no examples, prepend intro to current
+                    if not examples:
+                        message.append({"role": "user", "content": intro + "\n\n" + current})
+                    else:
+                        message.append({"role": "user", "content": current})
+                else:
+                    # Original behavior for OpenAI models
+                    message = [{"role": "system", "content": intro}]
+                    for (x, y) in examples:
+                        message.append(
+                            {
+                                "role": "system",
+                                "name": "example_user",
+                                "content": x,
+                            }
+                        )
+                        message.append(
+                            {
+                                "role": "system",
+                                "name": "example_assistant",
+                                "content": y,
+                            }
+                        )
+                    message.append({"role": "user", "content": current})
                 return message
             elif self.lm_config.mode == "completion":
                 message = f"{intro}\n\n"
@@ -333,70 +352,139 @@ class MultimodalCoTPromptConstructor(CoTPromptConstructor):
         message: list[dict[str, str]] | str | list[str | Image.Image]
         if "openai" in self.lm_config.provider:
             if self.lm_config.mode == "chat":
-                message = [
-                    {
-                        "role": "system",
-                        "content": [{"type": "text", "text": intro}],
-                    }
-                ]
-                for (x, y, z) in examples:
-                    example_img = Image.open(z)
-                    message.append(
-                        {
-                            "role": "system",
-                            "name": "example_user",
-                            "content": [
-                                {"type": "text", "text": x},
-                                {
-                                    "type": "text",
-                                    "text": "IMAGES: (1) current page screenshot",
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": pil_to_b64(example_img)
-                                    },
-                                },
-                            ],
-                        }
-                    )
-                    message.append(
-                        {
-                            "role": "system",
-                            "name": "example_assistant",
-                            "content": [{"type": "text", "text": y}],
-                        }
-                    )
+                # Check if model requires strict user/assistant alternation
+                # (e.g., Gemma models don't support system role or named roles)
+                model_lower = self.lm_config.model.lower()
+                is_strict_alternation = "gemma" in model_lower or "llama" in model_lower
 
-                # Encode images and page_screenshot_img as base64 strings.
-                current_prompt = current
-                content = [
-                    {
-                        "type": "text",
-                        "text": "IMAGES: (1) current page screenshot",
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": pil_to_b64(page_screenshot_img)},
-                    },
-                ]
-                for image_i, image in enumerate(images):
-                    content.extend(
-                        [
+                if is_strict_alternation:
+                    # For Gemma/Llama models: strict user/assistant alternation
+                    # Prepend intro to the first user message
+                    message = []
+                    for i, (x, y, z) in enumerate(examples):
+                        example_img = Image.open(z)
+                        user_text = (intro + "\n\n" + x) if i == 0 else x
+                        user_content = [
+                            {"type": "text", "text": user_text},
                             {
                                 "type": "text",
-                                "text": f"({image_i+2}) input image {image_i+1}",
+                                "text": "IMAGES: (1) current page screenshot",
                             },
                             {
                                 "type": "image_url",
-                                "image_url": {"url": pil_to_b64(image)},
+                                "image_url": {
+                                    "url": pil_to_b64(example_img)
+                                },
                             },
                         ]
-                    )
-                content = [{"type": "text", "text": current_prompt}] + content
+                        message.append({"role": "user", "content": user_content})
+                        message.append(
+                            {
+                                "role": "assistant",
+                                "content": [{"type": "text", "text": y}],
+                            }
+                        )
 
-                message.append({"role": "user", "content": content})
-                return message
+                    # Build final user message with current observation + images
+                    current_prompt = current
+                    # If no examples were provided, prepend intro here
+                    if not examples:
+                        current_prompt = intro + "\n\n" + current_prompt
+
+                    content = [
+                        {
+                            "type": "text",
+                            "text": "IMAGES: (1) current page screenshot",
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": pil_to_b64(page_screenshot_img)},
+                        },
+                    ]
+                    for image_i, image in enumerate(images):
+                        content.extend(
+                            [
+                                {
+                                    "type": "text",
+                                    "text": f"({image_i+2}) input image {image_i+1}",
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": pil_to_b64(image)},
+                                },
+                            ]
+                        )
+                    content = [{"type": "text", "text": current_prompt}] + content
+                    message.append({"role": "user", "content": content})
+                    return message
+
+                else:
+                    # Original behavior for GPT-4V and similar models
+                    # that support system role with named messages
+                    message = [
+                        {
+                            "role": "system",
+                            "content": [{"type": "text", "text": intro}],
+                        }
+                    ]
+                    for (x, y, z) in examples:
+                        example_img = Image.open(z)
+                        message.append(
+                            {
+                                "role": "system",
+                                "name": "example_user",
+                                "content": [
+                                    {"type": "text", "text": x},
+                                    {
+                                        "type": "text",
+                                        "text": "IMAGES: (1) current page screenshot",
+                                    },
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": pil_to_b64(example_img)
+                                        },
+                                    },
+                                ],
+                            }
+                        )
+                        message.append(
+                            {
+                                "role": "system",
+                                "name": "example_assistant",
+                                "content": [{"type": "text", "text": y}],
+                            }
+                        )
+
+                    # Encode images and page_screenshot_img as base64 strings.
+                    current_prompt = current
+                    content = [
+                        {
+                            "type": "text",
+                            "text": "IMAGES: (1) current page screenshot",
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": pil_to_b64(page_screenshot_img)},
+                        },
+                    ]
+                    for image_i, image in enumerate(images):
+                        content.extend(
+                            [
+                                {
+                                    "type": "text",
+                                    "text": f"({image_i+2}) input image {image_i+1}",
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": pil_to_b64(image)},
+                                },
+                            ]
+                        )
+                    content = [{"type": "text", "text": current_prompt}] + content
+
+                    message.append({"role": "user", "content": content})
+                    return message
             else:
                 raise ValueError(
                     f"GPT-4V models do not support mode {self.lm_config.mode}"

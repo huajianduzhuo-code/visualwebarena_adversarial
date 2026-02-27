@@ -7,7 +7,12 @@ from transformers import LlamaTokenizer  # type: ignore
 class Tokenizer(object):
     def __init__(self, provider: str, model_name: str) -> None:
         if provider == "openai":
-            self.tokenizer = tiktoken.encoding_for_model(model_name)
+            # PATCHED: fallback tokenizer for non-OpenAI models served via OpenAI-compatible API
+            try:
+                self.tokenizer = tiktoken.encoding_for_model(model_name)
+            except KeyError:
+                # Use cl100k_base as fallback (GPT-4 tokenizer, reasonable approximation)
+                self.tokenizer = tiktoken.get_encoding("cl100k_base")
         elif provider == "huggingface":
             self.tokenizer = LlamaTokenizer.from_pretrained(model_name)
             # turn off adding special tokens automatically

@@ -147,3 +147,10 @@ config_files/wa/test_webarena/*
 
 cache/*
 agents/prompts/jsons/*
+
+
+# helper scripts
+check_som_mismatch.py
+compare_som_ids.py
+test_adversarial_single.py
+analyze_som_mismatch_detailed.py
