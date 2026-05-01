@@ -1,10 +1,19 @@
 """Implements helper functions to assist evaluation cases where other evaluators are not suitable."""
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any, Union
 from urllib.parse import urlparse
 
 import requests
+
+
+# Model name passed to the OpenAI-compatible chat-completion endpoint when grading
+# answers via LLM judge (`llm_fuzzy_match` / `llm_ua_match`). Default keeps the
+# original behaviour (real OpenAI gpt-4-1106-preview); override with
+# `EVAL_LLM_MODEL=<served_model_id>` when routing OPENAI_BASE_URL to a local vLLM
+# (e.g. /home/<user>/spag_ckpt/pretrained/gemma-3-27b-it).
+_EVAL_LLM_MODEL = os.environ.get("EVAL_LLM_MODEL", "gpt-4-1106-preview")
 from beartype import beartype
 from beartype.typing import Dict, List
 from playwright.sync_api import CDPSession, Page
@@ -593,7 +602,7 @@ def llm_fuzzy_match(pred: str, reference: str, question: str) -> float:
     ]
 
     response = generate_from_openai_chat_completion(
-        model="gpt-4-1106-preview",
+        model=_EVAL_LLM_MODEL,
         messages=messages,
         temperature=0,
         max_tokens=768,
@@ -628,7 +637,7 @@ def llm_ua_match(pred: str, reference: str, question: str) -> float:
     ]
 
     response = generate_from_openai_chat_completion(
-        model="gpt-4-1106-preview",
+        model=_EVAL_LLM_MODEL,
         messages=messages,
         temperature=0,
         max_tokens=768,
