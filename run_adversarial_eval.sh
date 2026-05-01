@@ -36,6 +36,7 @@ cd "$SCRIPT_DIR"
 
 # Initialize conda (try common locations)
 for _CONDA_SH in \
+    "/home/lhaoyu_google_com/miniconda3/etc/profile.d/conda.sh" \
     "$HOME/miniconda3/etc/profile.d/conda.sh" \
     "$HOME/anaconda3/etc/profile.d/conda.sh" \
     "/opt/conda/etc/profile.d/conda.sh"; do
