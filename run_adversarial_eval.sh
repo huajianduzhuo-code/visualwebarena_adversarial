@@ -604,7 +604,16 @@ echo ""
 # ═══════════════════════════════════════════════════════════════════════════
 
 echo "--- Step 5: Aggregating results ---"
-python3 << 'PYEOF'
+SUMMARY_TXT="$RESULT_DIR/summary.txt"
+{
+    echo "=== run_adversarial_eval.sh summary ==="
+    echo "agent:    $AGENT_MODEL"
+    echo "attacker: $( [ "$NO_ATTACKER" = "1" ] && echo "DISABLED" || echo "$ATTACKER_MODEL" )"
+    echo "result_dir: $RESULT_DIR"
+    echo "timestamp: $(date -Iseconds)"
+    echo ""
+} > "$SUMMARY_TXT"
+python3 << 'PYEOF' 2>&1 | tee -a "$SUMMARY_TXT"
 import json, os, glob
 from collections import Counter
 
@@ -720,14 +729,16 @@ PYEOF
 TRAJ_COUNT=$(find "$RESULT_DIR" -name "trajectory.json" 2>/dev/null | wc -l)
 SCREENSHOT_COUNT=$(find "$RESULT_DIR" -name "*.png" 2>/dev/null | wc -l)
 echo ""
-echo "Saved $TRAJ_COUNT trajectory JSONs and $SCREENSHOT_COUNT screenshots."
+echo "Saved $TRAJ_COUNT trajectory JSONs and $SCREENSHOT_COUNT screenshots." | tee -a "$SUMMARY_TXT"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STEP 6: Extract trajectory summaries
 # ═══════════════════════════════════════════════════════════════════════════
 
+echo "" | tee -a "$SUMMARY_TXT"
+echo "--- Step 6: Extracting trajectory summaries ---" | tee -a "$SUMMARY_TXT"
+python extract_trajectory_summary.py "$RESULT_DIR" 2>&1 | tee -a "$SUMMARY_TXT"
+echo "" | tee -a "$SUMMARY_TXT"
+echo "=== Done ===" | tee -a "$SUMMARY_TXT"
 echo ""
-echo "--- Step 6: Extracting trajectory summaries ---"
-python extract_trajectory_summary.py "$RESULT_DIR"
-echo ""
-echo "=== Done ==="
+echo "📑 Summary written to: $SUMMARY_TXT"
